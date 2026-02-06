@@ -1,0 +1,44 @@
+use_vllm: true
+vllm_server_port: 8000
+bf16: true
+gradient_checkpointing: true
+remove_unused_columns: false
+ddp_find_unused_parameters: false
+beta: 0
+weight_decay: 0
+# GRPOConfig defaults
+
+output_dir: test_cad
+per_device_train_batch_size: 16
+gradient_accumulation_steps: 1
+
+max_completion_length: 425
+
+log_completions: false
+logging_steps: 30
+# valid if using one device, otherwise adjust generation_batch_size
+num_generations: 16
+generation_batch_size: 256
+report_to: ["comet_ml"]
+run_name: grpo_overfit_1_cadrecodev2_0
+num_train_epochs: 20
+save_strategy: steps
+save_steps: 100
+
+temperature: 1.0
+top_p: 1
+top_k: 50
+importance_sampling_level: sequence
+loss_type: dr_grpo
+epsilon: 0.1
+num_iterations: 3
+#steps_per_generation: 1
+scale_rewards: false
+
+learning_rate: 1e-5
+
+# Reward defaults
+failure_reward: -10
+iou_coef: 10
+cd_coef: 0
+auc_coef: 0

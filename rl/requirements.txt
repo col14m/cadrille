@@ -1,0 +1,7 @@
+vllm==0.10.1.1
+transformers @ git+https://github.com/huggingface/transformers@41980ce93e775f6c88500c51c8db7946fc6a2add
+tokenizers==0.21.4
+torch==2.7.1
+torchaudio==2.7.1
+torchvision==0.22.1
+trl==0.21.0

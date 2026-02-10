@@ -8,7 +8,11 @@ from PIL import Image, ImageOps
 
 import torch
 from torch.utils.data import Dataset
+
+os.environ["PYGLET_HEADLESS"] = "True"
+
 from pytorch3d.ops import sample_farthest_points
+from metrics_async import transform_real_mesh
 
 
 def mesh_to_point_cloud(mesh, n_points, n_pre_points=8192):
@@ -207,3 +211,105 @@ class Text2CADDataset(Dataset):
                 answer = f.read()
             input_item['answer'] = answer
         return input_item
+
+
+
+class CadrilleSTLDataset(Dataset):
+    def __init__(self, path, file_name, n_points=256, mode='pc',
+                 img_size=128, noise_scale_pc=None, size=None):
+        super().__init__()
+        self.n_points = n_points
+        self.path = path
+        self.img_size = img_size
+        self.noise_scale_pc = noise_scale_pc
+        if mode != 'swap':
+            self.mode = mode
+            self.next_mode = mode
+        else:
+            self.mode = "pc"
+            self.next_mode = "img"
+        self.size = size
+
+        with open(os.path.join(path, file_name), 'rb') as f:
+            self.annotations = pickle.load(f)
+        if self.size is None:
+            self.size = len(self.annotations)
+
+    def swap(self):
+        self.mode, self.next_mode = self.next_mode, self.mode
+
+    def __len__(self):
+        return min(len(self.annotations), self.size)
+
+    def __getitem__(self, idx):
+        # try:
+        mesh_path = os.path.join(self.path, self.annotations[idx]['mesh_path'])
+        mesh = trimesh.load_mesh(mesh_path)
+        mesh = transform_real_mesh(mesh)
+
+        if self.mode == 'pc':
+            input_item = self.get_point_cloud(mesh)
+        elif self.mode == 'img':
+            input_item = self.get_img(mesh)
+        elif self.mode == 'pc_img':
+            if np.random.rand() < 0.5:
+                input_item = self.get_point_cloud(mesh)
+            else:
+                input_item = self.get_img(mesh)
+        else:
+            raise ValueError(f"Invalid mode: {self.mode}")
+
+        input_item['mesh_path'] = mesh_path
+        input_item['mesh'] = mesh
+        input_item['idx'] = idx
+
+        return input_item
+
+    # except:
+    #     return self[(idx + 1) % len(self)]
+
+    def get_img(self, mesh):
+        mesh.apply_transform(trimesh.transformations.scale_matrix(1 / 2))
+        mesh.apply_transform(trimesh.transformations.translation_matrix([0.5, 0.5, 0.5]))
+
+        vertices = np.asarray(mesh.vertices)
+        faces = np.asarray(mesh.faces)
+        mesh = open3d.geometry.TriangleMesh()
+        mesh.vertices = open3d.utility.Vector3dVector(vertices)
+        mesh.triangles = open3d.utility.Vector3iVector(faces)
+        mesh.paint_uniform_color(np.array([255, 255, 136]) / 255.0)
+        mesh.compute_vertex_normals()
+
+        fronts = [[1, 1, 1], [-1, -1, -1], [-1, 1, -1], [1, -1, 1]]
+        images = []
+        for front in fronts:
+            image = mesh_to_image(mesh, camera_distance=-0.9,
+                                front=front, img_size=self.img_size)
+            images.append(image)
+
+        images = [ImageOps.expand(image, border=3, fill='black') for image in images]
+        images = [Image.fromarray(np.vstack((np.hstack((np.array(images[0]), np.array(images[1]))),
+                                             np.hstack((np.array(images[2]), np.array(images[3]))))))]
+        # import time
+        # os.makedirs("/home/jovyan/tarasov/imgs", exist_ok=True)
+        # images[0].save(f"/home/jovyan/tarasov/imgs/{time.time()}.png")
+        input_item = {
+            'video': images,
+            'description': 'Generate cadquery code',
+        }
+        return input_item
+
+    def get_point_cloud(self, mesh):
+        mesh = self._augment_pc(mesh)
+        point_cloud = mesh_to_point_cloud(mesh, self.n_points)
+
+        input_item = {
+            'point_cloud': point_cloud,
+            'description': 'Generate cadquery code',
+        }
+        return input_item
+
+    def _augment_pc(self, mesh):
+        if self.noise_scale_pc is not None and np.random.rand() < 0.5:
+            mesh.vertices += np.random.normal(loc=0, scale=self.noise_scale_pc, size=mesh.vertices.shape)
+        return mesh

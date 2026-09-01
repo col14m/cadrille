@@ -1,7 +1,6 @@
 ## `cadrille`: Multi-modal CAD Reconstruction with Online Reinforcement Learning
 
 **News**:
- * :fire: Jan, 2026. `cadrille` is accepted to ICLR 2026.
  * :fire: May, 2025. `cadrille` is state-of-the-art in three CAD reconstruction benchmarks: DeepCAD, Fusion360, CC3D.
  
 This repository contains an implementation of `cadrille`, a multi-modal (point clouds / images / text) 3D CAD reconstruction method introduced in our paper:
